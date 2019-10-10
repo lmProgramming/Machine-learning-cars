@@ -239,49 +239,6 @@ def main(genomes, config):
         for car in cars:
             car.move()
 
-        if 2 < 1:
-            for x, car in enumerate(cars):
-                # car.move()
-                ge[x].fitness += 0.1
-
-                output = nets[x].activate(
-                    (car.y, abs(car.y - pipes[pipe_ind].height), abs(bird.y - pipes[pipe_ind].bottom)))
-                if output[0] > 0.5:
-                    bird.jump()
-
-            add_pipe = False
-            rem = []
-            for pipe in pipes:
-                for x, bird in enumerate(birds):
-                    if pipe.collide(bird):
-                        ge[x].fitness -= 1
-                        birds.pop(x)
-                        nets.pop(x)
-                        ge.pop(x)
-
-                    if not pipe.passed and pipe.x < bird.x:
-                        pipe.passed = True
-                        add_pipe = True
-
-                    if bird.y + bird.img.get_height() > 730 or bird.y < 0:
-                        birds.pop(x)
-                        nets.pop(x)
-                        ge.pop(x)
-
-                if pipe.x + pipe.PIPE_TOP.get_width() < 0:
-                    rem.append(pipe)
-
-                pipe.move()
-
-            if add_pipe:
-                score += 1
-                for g in ge:
-                    g.fitness += 5
-                pipes.append((Pipe(600)))
-
-            for r in rem:
-                pipes.remove(r)
-
         draw_window(win, cars, borders, BG_IMG, score, GEN)
 
 

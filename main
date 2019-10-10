@@ -1,0 +1,303 @@
+import neat
+import os
+import pygame as pg
+from pygame.math import Vector2
+import math
+from shapely.geometry import LineString
+
+pg.font.init()
+
+WIDTH = 1000
+HEIGHT = 730
+
+GEN = 0
+
+CAR_IMG = pg.image.load(os.path.join("imgs", "car_img.png"))
+BG_IMG = pg.image.load(os.path.join("imgs", "bg_img.png"))
+
+STAT_FONT = pg.font.SysFont("arial", 50)
+
+
+class Car:
+    WHEEL_TURN = 60
+
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.velx = 0
+        self.vely = 0
+        self.angle = 0
+        self.img = CAR_IMG
+        self.speed = 0
+        self.acceleration = 0.004
+        self.forward_acceleration = self.acceleration
+        self.back_acceleration = self.forward_acceleration / 3
+        self.wheel_turn_coefficient = 1
+        self.lines = []
+
+    def move_forward(self, force):
+        if force < 0.5:
+            force = force - 0.5
+            self.acceleration = self.back_acceleration
+        else:
+            force = force - 0.5
+            self.acceleration = self.forward_acceleration
+
+        self.speed += force * self.acceleration
+
+    def steer(self, way):
+        self.wheel_turn_coefficient = math.sqrt(abs(self.speed))
+
+        if abs(self.speed) < 0.00001:
+            if abs(self.speed) < 0.000001:
+                way = 0.5
+            else:
+                self.wheel_turn_coefficient = 0.01
+
+        if way < 0.5:
+            self.angle -= self.WHEEL_TURN * (0.5 - way) * self.wheel_turn_coefficient
+        if way > 0.5:
+            self.angle += self.WHEEL_TURN * (way - 0.5) * self.wheel_turn_coefficient
+
+    def move(self):
+        self.speed *= 0.95
+
+        if self.angle < -180:
+            self.angle = 180
+        if self.angle > 180:
+            self.angle = -180
+
+        self.velx *= 0.96
+        self.vely *= 0.96
+        self.speed *= 0.6
+
+        if self.angle < 0:
+            if self.angle < -90:
+                self.velx += -self.speed * (self.angle + 180)
+                self.vely += self.speed * (90 - (self.angle + 180))
+            else:
+                self.velx += self.speed * self.angle
+                self.vely += -self.speed * abs(-90 - self.angle)
+        else:
+            if self.angle > 90:
+                self.velx += -self.speed * (self.angle - 180)
+                self.vely += -self.speed * (90 - self.angle)
+            else:
+                self.velx += self.speed * self.angle
+                self.vely += -self.speed * (90 - self.angle)
+
+        self.x += self.velx
+        self.y += self.vely
+
+    def check_intersections(self, borders, win):
+        self.lines = [1]
+        for line in self.lines:
+            for border in borders:
+                pass
+                #if get_intesect_point([line.x, line.y, 1, 1], [0, 0.5, 2, 0.5]):
+                    #pass
+                #if intersect(Vector2(self.x, self.y), Vector2(0, HEIGHT), Vector2(border.x1, border.y1), Vector2(border.x2, border.y2)):
+                #   pg.draw.circle(win, (255, 255, 255), intersect(Vector2w(self.x, self.y), Vector2(0, HEIGHT), Vector2(border.x1, border.y1), Vector2(border.x2, border.y2)), 20, 20)
+                #else:
+                #    print("NEIN")
+
+    def draw(self, win):
+        rotated_image = pg.transform.rotate(self.img, -self.angle)
+        new_rect = rotated_image.get_rect(center=self.img.get_rect(topleft=(self.x, self.y)).center)
+        win.blit(rotated_image, new_rect.topleft)
+
+
+class CarRay:
+    def __init__(self, x, y, angle, base_dist):
+        self.x = x
+        self.y = y
+        self.base_angle = angle
+        self.angle = angle
+        self.base_dist = base_dist
+        self.vector_two = (0, 0)
+
+    def update(self, x, y, new_angle):
+        self.x, self.y = x, y
+        self.angle = new_angle + self.base_angle
+        self.vector_two = line_from_angle([self.x, self.y], self.angle, self.base_dist)
+
+    def check_intersections(self, border):
+        point = get_intersect_point([self.x, self.y, self.vector_two[0], self.vector_two[1]], [border.x1, border.y1, border.x2, border.y2])
+        if point:
+            print(1)
+            if point.distance(LineString([(self.x, self.y), (self.vector_two[0], self.vector_two[1])])) < self.base_dist:
+                print(point.distance(LineString([(self.x, self.y), (self.vector_two[0], self.vector_two[1])])), point)
+
+    def draw(self, win):
+        pg.draw.line(win, (255, 255, 255), (self.x, self.y), self.vector_two, 2)
+
+
+class Border:
+    def __init__(self, x1, y1, x2, y2, thickness=6):
+        self.x1 = x1
+        self.x2 = x2
+        self.y1 = y1
+        self.y2 = y2
+        self.thickness = thickness
+
+    def draw(self, win):
+        pg.draw.line(win, (0, 0, 0), (self.x1, self.y1), (self.x2, self.y2), self.thickness)
+
+
+def draw_line(position, angle, line_length, line_width, color, screen):
+    vector = Vector2()
+    vector.from_polar((line_length, angle))
+    pg.draw.line(screen, color, position, position+vector, line_width)
+
+
+def line_from_angle(point, angle, distance):
+    angle *= 0.0175
+    angle -= 1.57
+    return point[0] + distance * math.cos(angle), point[1] + distance * math.sin(angle)
+
+
+def get_intersect_point(line1, line2):
+    line_a = LineString([(line1[0], line1[1]), (line1[2], line2[3]), (1, 1)])
+    line_b = LineString([(line2[0], line2[1]), (line1[2], line2[3])])
+    return line_a.intersection(line_b)
+
+
+def draw_window(win, cars, borders, bg_img, score, gen):
+    win.blit(bg_img, (0, 0))
+
+    for car in cars:
+        car.draw(win)
+        for line in car.lines:
+            line.update(car.x + 16, car.y + 16, car.angle)
+            for border in borders:
+                line.check_intersections(border)
+            line.draw(win)
+
+    for border in borders:
+        border.draw(win)
+
+    text = STAT_FONT.render("Score: " + str(score), 1, (255, 255, 255))
+    win.blit(text, (WIDTH - 10 - text.get_width(), 10))
+
+    text = STAT_FONT.render("Gen: " + str(gen), 1, (255, 255, 255))
+    win.blit(text, (10, 10))
+
+    pg.display.update()
+
+
+def main(genomes, config):
+    global GEN
+    GEN += 1
+    nets = []
+    ge = []
+    cars = [Car(150, HEIGHT - 60)]
+    cars[0].lines = [CarRay(cars[0].x, cars[0].y, 0, 250)]
+    borders = [Border(107, 626, 79, 537),
+             Border(107, HEIGHT, 107, 626)]
+
+    # for _, g in genomes:
+    # net = neat.nn.FeedForwardNetwork.create(g, config)
+    # nets.append(net)
+    # birds.append(Bird(230, 350))
+    # g.fitness = 0
+    # ge.append(g)
+
+    win = pg.display.set_mode((WIDTH, HEIGHT))
+    clock = pg.time.Clock()
+
+    score = 0
+    run = True
+    while run:
+        clock.tick(60)
+
+        m_x, m_y = pg.mouse.get_pos()
+        mouse_pressed = pg.mouse.get_pressed()
+
+        if mouse_pressed[0]:
+            print(m_x, ",", m_y)
+
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
+                run = False
+                pg.quit()
+                quit()
+
+        keys = pg.key.get_pressed()
+
+        if keys[pg.K_w]:
+            cars[0].move_forward(1)
+        elif keys[pg.K_s]:
+            cars[0].move_forward(0)
+        else:
+            cars[0].move_forward(0.5)
+
+        if keys[pg.K_a]:
+            cars[0].steer(0)
+        if keys[pg.K_d]:
+            cars[0].steer(1)
+
+        for car in cars:
+            car.move()
+
+        if 2 < 1:
+            for x, car in enumerate(cars):
+                # car.move()
+                ge[x].fitness += 0.1
+
+                output = nets[x].activate(
+                    (car.y, abs(car.y - pipes[pipe_ind].height), abs(bird.y - pipes[pipe_ind].bottom)))
+                if output[0] > 0.5:
+                    bird.jump()
+
+            add_pipe = False
+            rem = []
+            for pipe in pipes:
+                for x, bird in enumerate(birds):
+                    if pipe.collide(bird):
+                        ge[x].fitness -= 1
+                        birds.pop(x)
+                        nets.pop(x)
+                        ge.pop(x)
+
+                    if not pipe.passed and pipe.x < bird.x:
+                        pipe.passed = True
+                        add_pipe = True
+
+                    if bird.y + bird.img.get_height() > 730 or bird.y < 0:
+                        birds.pop(x)
+                        nets.pop(x)
+                        ge.pop(x)
+
+                if pipe.x + pipe.PIPE_TOP.get_width() < 0:
+                    rem.append(pipe)
+
+                pipe.move()
+
+            if add_pipe:
+                score += 1
+                for g in ge:
+                    g.fitness += 5
+                pipes.append((Pipe(600)))
+
+            for r in rem:
+                pipes.remove(r)
+
+        draw_window(win, cars, borders, BG_IMG, score, GEN)
+
+
+def run(config_path):
+    config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet,
+                                neat.DefaultStagnation, config_path)
+    p = neat.Population(config)
+
+    p.add_reporter(neat.StdOutReporter(True))
+    stats = neat.StatisticsReporter()
+    p.add_reporter(stats)
+
+    winner = p.run(main, 50)
+
+
+if __name__ == "__main__":
+    local_dir = os.path.dirname(__file__)
+    config_path = os.path.join(local_dir, "config-feedforward.txt")
+    run(config_path)
